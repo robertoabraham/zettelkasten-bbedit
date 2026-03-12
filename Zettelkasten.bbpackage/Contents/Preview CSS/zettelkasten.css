@@ -1,0 +1,12 @@
+body {
+  max-width: 42em;
+  margin: auto;
+  /* line-height: 1.6; */
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 1.2em auto;
+}

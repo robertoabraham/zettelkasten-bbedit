@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Preview</title>
+
+<style>
+/* ── Base layout ── */
+body {
+  max-width: 42em;
+  margin: 2em auto;
+  padding: 0 1em;
+  font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  color: #333;
+  background: #fff;
+}
+
+/* ── Images ── */
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 1.2em auto;
+}
+
+/* ── Headings ── */
+h1 { font-size: 1.8em; margin-top: 1em; border-bottom: 1px solid #ddd; padding-bottom: 0.3em; }
+h2 { font-size: 1.4em; margin-top: 1.2em; }
+h3 { font-size: 1.15em; margin-top: 1em; }
+
+/* ── Links ── */
+a { color: #4271ae; text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ── Wiki-links (styled distinctly) ── */
+a.wiki-link {
+  color: #7c4dff;
+  background: #f3efff;
+  padding: 0 0.2em;
+  border-radius: 3px;
+}
+a.wiki-link:hover {
+  background: #e8e0ff;
+  text-decoration: none;
+}
+
+/* ── Code ── */
+code {
+  font-family: "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.9em;
+  background: #f5f5f5;
+  padding: 0.15em 0.35em;
+  border-radius: 3px;
+}
+pre code {
+  display: block;
+  padding: 1em;
+  overflow-x: auto;
+  line-height: 1.45;
+}
+
+/* ── Blockquotes ── */
+blockquote {
+  margin: 1em 0;
+  padding: 0.5em 1em;
+  border-left: 3px solid #ddd;
+  color: #666;
+}
+
+/* ── Tables ── */
+table { border-collapse: collapse; margin: 1em 0; }
+th, td { border: 1px solid #ddd; padding: 0.5em 0.75em; text-align: left; }
+th { background: #f5f5f5; }
+
+/* ── Horizontal rules ── */
+hr { border: none; border-top: 1px solid #ddd; margin: 2em 0; }
+
+/* ── MathJax display equations: center with breathing room ── */
+mjx-container[display="true"] {
+  margin: 1.2em 0 !important;
+}
+</style>
+
+<!-- ── MathJax v3 Configuration ── -->
+<script>
+// ── Zettelkasten root path (edit this if your notes live elsewhere) ──
+var ZETTELKASTEN_ROOT = '~/Zettelkasten';
+
+MathJax = {
+  tex: {
+    inlineMath:  [['$', '$'], ['\\(', '\\)']],
+    displayMath: [['$$', '$$'], ['\\[', '\\]']],
+    processEscapes: true,
+    processEnvironments: true
+  },
+  options: {
+    skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code',
+                   'annotation', 'annotation-xml'],
+    ignoreHtmlClass: 'mathjax_ignore'
+  },
+  startup: {
+    pageReady: function () {
+      protectMoneyAmounts();
+      return MathJax.startup.defaultPageReady().then(function () {
+        convertWikiLinks();
+      });
+    }
+  }
+};
+
+function protectMoneyAmounts() {
+  // Walk text nodes BEFORE MathJax runs and wrap $NNN patterns
+  // in a span with class 'mathjax_ignore' so MathJax skips them.
+  var walker = document.createTreeWalker(
+    document.body, NodeFilter.SHOW_TEXT, null, false
+  );
+  var textNodes = [];
+  while (walker.nextNode()) textNodes.push(walker.currentNode);
+
+  var moneyRe = /\$(\d[\d,]*\.?\d*)/g;
+
+  textNodes.forEach(function (node) {
+    if (!moneyRe.test(node.nodeValue)) return;
+    moneyRe.lastIndex = 0;
+
+    var parent = node.parentNode;
+    var tag = parent.tagName ? parent.tagName.toLowerCase() : '';
+    if (tag === 'code' || tag === 'pre') return;
+
+    var frag = document.createDocumentFragment();
+    var lastIndex = 0;
+    var match;
+
+    while ((match = moneyRe.exec(node.nodeValue)) !== null) {
+      if (match.index > lastIndex) {
+        frag.appendChild(document.createTextNode(
+          node.nodeValue.substring(lastIndex, match.index)
+        ));
+      }
+      var span = document.createElement('span');
+      span.className = 'mathjax_ignore';
+      span.textContent = '$' + match[1];
+      frag.appendChild(span);
+      lastIndex = match.index + match[0].length;
+    }
+
+    if (lastIndex < node.nodeValue.length) {
+      frag.appendChild(document.createTextNode(
+        node.nodeValue.substring(lastIndex)
+      ));
+    }
+
+    parent.replaceChild(frag, node);
+  });
+}
+
+function resolveZettelkastenPath() {
+  // Expand ~ to the user's home directory.
+  // In BBEdit's preview, we can infer the home dir from the page URL.
+  var home = '/Users/' + (location.pathname.split('/Users/')[1] || '').split('/')[0];
+  if (!home || home === '/Users/') {
+    home = '/Users';  // fallback
+  }
+  return ZETTELKASTEN_ROOT.replace(/^~/, home);
+}
+
+function convertWikiLinks() {
+  var zettelPath = resolveZettelkastenPath();
+
+  var walker = document.createTreeWalker(
+    document.body, NodeFilter.SHOW_TEXT, null, false
+  );
+  var textNodes = [];
+  while (walker.nextNode()) textNodes.push(walker.currentNode);
+
+  var wikiRe = /\[\[([^\]]+)\]\]/g;
+
+  textNodes.forEach(function (node) {
+    if (!wikiRe.test(node.nodeValue)) return;
+    wikiRe.lastIndex = 0;
+
+    var parent = node.parentNode;
+    var tag = parent.tagName ? parent.tagName.toLowerCase() : '';
+    if (tag === 'code' || tag === 'pre' || tag === 'a') return;
+
+    var frag = document.createDocumentFragment();
+    var lastIndex = 0;
+    var match;
+
+    while ((match = wikiRe.exec(node.nodeValue)) !== null) {
+      if (match.index > lastIndex) {
+        frag.appendChild(document.createTextNode(
+          node.nodeValue.substring(lastIndex, match.index)
+        ));
+      }
+      var linkTarget = match[1];
+      var a = document.createElement('a');
+      a.className = 'wiki-link';
+      var filePath = zettelPath + '/' + linkTarget + '.md';
+      a.href = 'x-bbedit://open?url=file://' + encodeURI(filePath);
+      a.textContent = linkTarget;
+      frag.appendChild(a);
+      lastIndex = match.index + match[0].length;
+    }
+
+    if (lastIndex < node.nodeValue.length) {
+      frag.appendChild(document.createTextNode(
+        node.nodeValue.substring(lastIndex)
+      ));
+    }
+
+    parent.replaceChild(frag, node);
+  });
+}
+</script>
+
+<!-- ── Load MathJax v3 from CDN ── -->
+<script id="MathJax-script" async
+  src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js">
+</script>
+
+</head>
+<body>
+
+#DOCUMENT_CONTENT#
+
+</body>
+</html>
