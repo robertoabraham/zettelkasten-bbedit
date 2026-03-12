@@ -61,8 +61,7 @@ fi
 
 # 4. Install helper scripts
 mkdir -p "$SCRIPTS_DIR"
-cp "$REPO_DIR/scripts/find_backlinks.py" "$SCRIPTS_DIR/"
-chmod +x "$SCRIPTS_DIR/find_backlinks.py"
+install -m 755 "$REPO_DIR/scripts/find_backlinks.py" "$SCRIPTS_DIR/"
 echo "  Installed helper scripts to $SCRIPTS_DIR/"
 
 # 5. Done

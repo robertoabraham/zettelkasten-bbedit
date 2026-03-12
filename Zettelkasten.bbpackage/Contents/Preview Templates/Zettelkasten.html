@@ -47,6 +47,18 @@ a.wiki-link:hover {
   text-decoration: none;
 }
 
+/* ── Zotero citation links ── */
+a.cite-link {
+  color: #2e7d32;
+  background: #e8f5e9;
+  padding: 0 0.2em;
+  border-radius: 3px;
+}
+a.cite-link:hover {
+  background: #c8e6c9;
+  text-decoration: none;
+}
+
 /* ── Code ── */
 code {
   font-family: "SF Mono", Menlo, Consolas, monospace;
@@ -114,43 +126,83 @@ MathJax = {
 function protectMoneyAmounts() {
   // Walk text nodes BEFORE MathJax runs and wrap $NNN patterns
   // in a span with class 'mathjax_ignore' so MathJax skips them.
+  //
+  // The tricky part: distinguish money ($500) from math that starts
+  // with a digit ($10^{13}$, $50 R_\odot$). Strategy:
+  //   1. Find all $ positions in each text node
+  //   2. Greedily pair adjacent $ signs whose content contains math
+  //      indicators (\, ^, _, {, })
+  //   3. Only protect $digit patterns whose $ is NOT part of a math pair
   var walker = document.createTreeWalker(
     document.body, NodeFilter.SHOW_TEXT, null, false
   );
   var textNodes = [];
   while (walker.nextNode()) textNodes.push(walker.currentNode);
 
+  var mathChars = /[\\^_{}]/;
   var moneyRe = /\$(\d[\d,]*\.?\d*)/g;
 
   textNodes.forEach(function (node) {
-    if (!moneyRe.test(node.nodeValue)) return;
-    moneyRe.lastIndex = 0;
+    var text = node.nodeValue;
+    if (text.indexOf('$') === -1) return;
 
     var parent = node.parentNode;
     var tag = parent.tagName ? parent.tagName.toLowerCase() : '';
     if (tag === 'code' || tag === 'pre') return;
 
+    // Step 1: find all $ positions
+    var dollarPositions = [];
+    for (var i = 0; i < text.length; i++) {
+      if (text[i] === '$') dollarPositions.push(i);
+    }
+
+    // Step 2: greedily pair $ signs whose content looks like math
+    var mathDollars = {};
+    var idx = 0;
+    while (idx < dollarPositions.length - 1) {
+      var open = dollarPositions[idx];
+      var close = dollarPositions[idx + 1];
+      var content = text.substring(open + 1, close);
+      if (mathChars.test(content)) {
+        mathDollars[open] = true;
+        mathDollars[close] = true;
+        idx += 2;  // skip past this pair
+      } else {
+        idx += 1;  // not a math pair, try next
+      }
+    }
+
+    // Step 3: find $digit patterns NOT in math pairs (and not part of $$)
+    var moneyMatches = [];
+    var match;
+    moneyRe.lastIndex = 0;
+    while ((match = moneyRe.exec(text)) !== null) {
+      var pos = match.index;
+      // Skip if this $ is part of a math pair
+      if (mathDollars[pos]) continue;
+      // Skip if preceded by $ (part of $$ display math delimiter)
+      if (pos > 0 && text[pos - 1] === '$') continue;
+      moneyMatches.push({ index: pos, length: match[0].length, text: match[0] });
+    }
+
+    if (moneyMatches.length === 0) return;
+
+    // Build fragment with money amounts wrapped in mathjax_ignore spans
     var frag = document.createDocumentFragment();
     var lastIndex = 0;
-    var match;
-
-    while ((match = moneyRe.exec(node.nodeValue)) !== null) {
-      if (match.index > lastIndex) {
-        frag.appendChild(document.createTextNode(
-          node.nodeValue.substring(lastIndex, match.index)
-        ));
+    moneyMatches.forEach(function (m) {
+      if (m.index > lastIndex) {
+        frag.appendChild(document.createTextNode(text.substring(lastIndex, m.index)));
       }
       var span = document.createElement('span');
       span.className = 'mathjax_ignore';
-      span.textContent = '$' + match[1];
+      span.textContent = m.text;
       frag.appendChild(span);
-      lastIndex = match.index + match[0].length;
-    }
+      lastIndex = m.index + m.length;
+    });
 
-    if (lastIndex < node.nodeValue.length) {
-      frag.appendChild(document.createTextNode(
-        node.nodeValue.substring(lastIndex)
-      ));
+    if (lastIndex < text.length) {
+      frag.appendChild(document.createTextNode(text.substring(lastIndex)));
     }
 
     parent.replaceChild(frag, node);
@@ -198,10 +250,20 @@ function convertWikiLinks() {
       }
       var linkTarget = match[1];
       var a = document.createElement('a');
-      a.className = 'wiki-link';
-      var filePath = zettelPath + '/' + linkTarget + '.md';
-      a.href = 'x-bbedit://open?url=file://' + encodeURI(filePath);
-      a.textContent = linkTarget;
+
+      if (linkTarget.charAt(0) === '@') {
+        // Zotero citation: [[@citekey]] → open in Zotero via Better BibTeX
+        a.className = 'cite-link';
+        a.href = 'zotero://select/items/' + linkTarget;
+        a.textContent = linkTarget;
+      } else {
+        // Regular wiki-link: [[Note Name]] → open in BBEdit
+        a.className = 'wiki-link';
+        var filePath = zettelPath + '/' + linkTarget + '.md';
+        a.href = 'x-bbedit://open?url=file://' + encodeURI(filePath);
+        a.textContent = linkTarget;
+      }
+
       frag.appendChild(a);
       lastIndex = match.index + match[0].length;
     }
