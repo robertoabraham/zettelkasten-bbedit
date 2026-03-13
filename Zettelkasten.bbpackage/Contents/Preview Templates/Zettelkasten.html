@@ -59,6 +59,15 @@ a.cite-link:hover {
   text-decoration: none;
 }
 
+/* ── Tags ── */
+span.zettel-tag {
+  color: #e65100;
+  background: #fff3e0;
+  padding: 0 0.3em;
+  border-radius: 3px;
+  font-size: 0.9em;
+}
+
 /* ── Code ── */
 code {
   font-family: "SF Mono", Menlo, Consolas, monospace;
@@ -118,6 +127,7 @@ MathJax = {
       protectMoneyAmounts();
       return MathJax.startup.defaultPageReady().then(function () {
         convertWikiLinks();
+        convertTags();
       });
     }
   }
@@ -267,6 +277,69 @@ function convertWikiLinks() {
       frag.appendChild(a);
       lastIndex = match.index + match[0].length;
     }
+
+    if (lastIndex < node.nodeValue.length) {
+      frag.appendChild(document.createTextNode(
+        node.nodeValue.substring(lastIndex)
+      ));
+    }
+
+    parent.replaceChild(frag, node);
+  });
+}
+
+function convertTags() {
+  // Convert #tag-name patterns into styled spans.
+  // Distinguishing from Markdown headings is easy: BBEdit's renderer
+  // converts "# Heading" into <h1> elements, so # symbols from headings
+  // never appear as raw text in the DOM.
+  var walker = document.createTreeWalker(
+    document.body, NodeFilter.SHOW_TEXT, null, false
+  );
+  var textNodes = [];
+  while (walker.nextNode()) textNodes.push(walker.currentNode);
+
+  // Match # followed by a letter, then letters/digits/hyphens/underscores.
+  // The # must be at the start of the text or preceded by whitespace/punctuation.
+  var tagRe = /(^|[\s(,;:])#([a-zA-Z][a-zA-Z0-9_-]*)/g;
+
+  textNodes.forEach(function (node) {
+    if (node.nodeValue.indexOf('#') === -1) return;
+
+    var parent = node.parentNode;
+    var tag = parent.tagName ? parent.tagName.toLowerCase() : '';
+    // Skip code, pre, links, and headings
+    if (tag === 'code' || tag === 'pre' || tag === 'a') return;
+    if (/^h[1-6]$/.test(tag)) return;
+
+    tagRe.lastIndex = 0;
+    if (!tagRe.test(node.nodeValue)) return;
+    tagRe.lastIndex = 0;
+
+    var frag = document.createDocumentFragment();
+    var lastIndex = 0;
+    var match;
+
+    while ((match = tagRe.exec(node.nodeValue)) !== null) {
+      var prefix = match[1];  // whitespace/punctuation before the #
+      var tagName = match[2]; // the tag text after #
+
+      // Append text before this match (including the prefix character)
+      var beforeEnd = match.index + prefix.length;
+      if (beforeEnd > lastIndex) {
+        frag.appendChild(document.createTextNode(
+          node.nodeValue.substring(lastIndex, beforeEnd)
+        ));
+      }
+
+      var span = document.createElement('span');
+      span.className = 'zettel-tag';
+      span.textContent = '#' + tagName;
+      frag.appendChild(span);
+      lastIndex = match.index + match[0].length;
+    }
+
+    if (lastIndex === 0) return;  // no replacements made
 
     if (lastIndex < node.nodeValue.length) {
       frag.appendChild(document.createTextNode(

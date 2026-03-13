@@ -4,6 +4,8 @@ A lightweight knowledge management system using BBEdit and Markdown files, with 
 
 - **LaTeX math** via MathJax (`$...$` for inline, `$$...$$` for display)
 - **Wiki-links** (`[[Note Name]]`) that open linked notes in BBEdit
+- **Zotero citations** (`[[@citekey]]`) that open papers in Zotero
+- **Tags** (`#tag-name`) rendered with distinct styling
 - **Images, hyperlinks, and standard Markdown** rendered in BBEdit's preview
 - **Dollar sign protection** so `$500` isn't mistaken for math
 
@@ -12,7 +14,7 @@ No databases, no Electron apps, no syncing services — just Markdown files on y
 ## Installation
 
 ```bash
-git clone https://github.com/your-username/zettelkasten-bbedit.git
+git clone https://github.com/robertoabraham/zettelkasten-bbedit.git
 cd zettelkasten-bbedit
 ./install.sh
 ```
@@ -52,6 +54,26 @@ See also [[Another Note]] and [[Subfolder/Deep Note]].
 ```
 
 Clicking a wiki-link in the preview opens the target `.md` file in BBEdit.
+
+### Zotero Citations
+
+Reference papers in your Zotero library using `[[@citekey]]` syntax:
+
+```markdown
+See [[@allen2008]] for the MAPPINGS III models.
+```
+
+Clicking a citation link opens the paper in Zotero (requires the Better BibTeX plugin).
+
+### Tags
+
+Add tags to your notes with `#tag-name`:
+
+```markdown
+This note is about #stellar-evolution and #spectroscopy.
+```
+
+Tags are rendered with a distinct orange style in the preview. They won't conflict with Markdown headings (which use `# ` with a space).
 
 ### Images and Links
 
@@ -99,6 +121,8 @@ zettelkasten-bbedit/
         zettelkasten-wide.css Full-width variant
   scripts/
     find_backlinks.py         Backlink finder utility
+  examples/
+    Math Preview Test.md      Test file demonstrating all features
   install.sh                  Installer / uninstaller
   README.md
 ```
